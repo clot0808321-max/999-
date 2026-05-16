@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+    <rect width="100%" height="100%" rx="32" fill="#fef3c7"/>
+    <circle cx="670" cy="90" r="70" fill="#ffffff" opacity=".28"/>
+    <rect x="90" y="120" width="620" height="320" rx="28" fill="#fff" opacity=".92"/>
+    <text x="400" y="280" text-anchor="middle" font-family="Arial,'Microsoft JhengHei'" font-size="54" font-weight="700" fill="#b91c1c">台灣米酒</text>
+    <text x="400" y="350" text-anchor="middle" font-family="Arial,'Microsoft JhengHei'" font-size="28" fill="#555">999台灣商店</text>
+  </svg>

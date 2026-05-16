@@ -1,0 +1,24 @@
+<!doctype html><html lang="zh-Hant"><head><%- include('meta') %></head><body>
+<div class="admin-layout"><%- include('partials-admin-nav') %>
+<main class="admin-main">
+  <h1>訂單 #<%= order.id %></h1>
+  <div class="panel">
+    <p><strong>姓名：</strong><%= order.customer_name %></p>
+    <p><strong>電話：</strong><%= order.phone %></p>
+    <p><strong>地址：</strong><%= order.address %></p>
+    <p><strong>備註：</strong><%= order.note || '無' %></p>
+    <form action="/admin/orders/<%= order.id %>/status" method="post">
+      <label>訂單狀態
+        <select name="status">
+          <% ['新訂單','處理中','已完成','已取消'].forEach(s => { %><option <%= order.status===s?'selected':'' %>><%= s %></option><% }) %>
+        </select>
+      </label>
+      <button class="btn small">更新狀態</button>
+    </form>
+  </div>
+  <h2>商品明細</h2>
+  <table><tr><th>商品</th><th>價格</th><th>數量</th><th>小計</th></tr>
+  <% items.forEach(i => { %><tr><td><%= i.product_name %></td><td>$<%= formatPrice(i.price) %></td><td><%= i.quantity %></td><td>$<%= formatPrice(i.subtotal) %></td></tr><% }) %>
+  </table>
+  <h2>總金額：$<%= formatPrice(order.total) %></h2>
+</main></div></body></html>

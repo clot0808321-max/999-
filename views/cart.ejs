@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh-Hant"><head><%- include('meta') %></head><body>
+<%- include('partials-header', {cartCount}) %>
+<main class="container">
+  <h1>購物車</h1>
+  <% if (cart.length === 0) { %>
+    <div class="empty">購物車目前是空的。<a href="/">回首頁選購</a></div>
+  <% } else { %>
+  <form action="/cart/update" method="post" class="cart-box">
+    <% cart.forEach(item => { %>
+      <div class="cart-row">
+        <img src="<%= item.image || '/uploads/sample-1.svg' %>">
+        <div><strong><%= item.name %></strong><p>$<%= formatPrice(item.price) %></p></div>
+        <input type="hidden" name="product_id" value="<%= item.product_id %>">
+        <input type="number" name="quantity" value="<%= item.quantity %>" min="1">
+        <div>$<%= formatPrice(item.price * item.quantity) %></div>
+        <button type="submit" formaction="/cart/remove" name="product_id" value="<%= item.product_id %>" class="danger">刪除</button>
+      </div>
+    <% }) %>
+    <div class="cart-total">總金額：$<%= formatPrice(total) %></div>
+    <button class="btn">更新數量</button>
+    <a class="btn checkout" href="/checkout">前往結帳</a>
+  </form>
+  <% } %>
+</main>
+</body></html>

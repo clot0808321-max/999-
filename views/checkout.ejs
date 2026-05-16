@@ -1,0 +1,20 @@
+<!doctype html><html lang="zh-Hant"><head><%- include('meta') %></head><body>
+<%- include('partials-header', {cartCount}) %>
+<main class="container form-page">
+  <h1>結帳下單</h1>
+  <div class="checkout-grid">
+    <form action="/checkout" method="post" class="panel">
+      <label>姓名<input required name="customer_name" placeholder="請輸入姓名"></label>
+      <label>電話<input required name="phone" placeholder="請輸入電話"></label>
+      <label>地址<textarea required name="address" placeholder="請輸入送貨地址"></textarea></label>
+      <label>備註<textarea name="note" placeholder="例如：送貨時間、特殊需求"></textarea></label>
+      <button class="btn">送出訂單</button>
+    </form>
+    <div class="panel">
+      <h2>訂單內容</h2>
+      <% cart.forEach(item => { %><p><%= item.name %> × <%= item.quantity %> = $<%= formatPrice(item.price * item.quantity) %></p><% }) %>
+      <h3>總金額：$<%= formatPrice(total) %></h3>
+    </div>
+  </div>
+</main>
+</body></html>

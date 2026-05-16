@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh-Hant"><head><%- include('meta') %></head><body>
+<div class="admin-layout"><%- include('partials-admin-nav') %>
+<main class="admin-main">
+  <h1>分類管理</h1>
+  <form class="panel mini-form" action="/admin/categories/new" method="post">
+    <input name="name" placeholder="新增分類名稱" required>
+    <input name="sort_order" type="number" placeholder="排序" value="99">
+    <button class="btn">新增分類</button>
+  </form>
+  <table><tr><th>分類名稱</th><th>排序</th><th>操作</th></tr>
+  <% categories.forEach(c => { %>
+    <tr><form action="/admin/categories/<%= c.id %>/edit" method="post"><td><input name="name" value="<%= c.name %>"></td><td><input name="sort_order" type="number" value="<%= c.sort_order %>"></td><td><button>修改</button></form>
+    <form class="inline" action="/admin/categories/<%= c.id %>/delete" method="post" onsubmit="return confirm('確定刪除分類？')"><button class="link-danger">刪除</button></form></td></tr>
+  <% }) %></table>
+</main></div></body></html>
