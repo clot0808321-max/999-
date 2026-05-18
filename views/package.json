@@ -1,0 +1,22 @@
+{
+  "name": "99-taiwan-shop-easy-json",
+  "version": "1.1.0",
+  "description": "99台灣商店：免SQLite編譯版，前台 + 後台 + JSON資料庫",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.2",
+    "express-session": "^1.18.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
