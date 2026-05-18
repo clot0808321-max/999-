@@ -296,11 +296,13 @@ app.get('/admin/export/sales', async (req, res) => {
     { header: '金額', key: 'total', width: 15 }
   ];
 
+ db.orders.forEach(o => {
   sheet.addRow({
-    id: 'A001',
-    customer: '測試客戶',
-    total: 999
+    id: o.id || '',
+    customer: o.customer_name || '',
+    total: o.total || ''
   });
+});
 
   res.setHeader(
     'Content-Type',
