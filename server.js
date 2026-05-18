@@ -264,11 +264,13 @@ app.get('/admin/export/inventory', async (req, res) => {
     { header: '庫存', key: 'stock', width: 15 }
   ];
 
+  db.products.forEach(p => {
   sheet.addRow({
-    name: '測試商品',
-    price: 100,
-    stock: 50
+    name: p.name || '',
+    price: p.price || '',
+    stock: p.stock || ''
   });
+});
 
   res.setHeader(
     'Content-Type',
