@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
+const ExcelJS = require('exceljs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -253,6 +254,65 @@ app.post('/admin/orders/:id/status', requireAdmin, (req,res)=>{
   res.redirect('/admin/orders/' + req.params.id);
 });
 
+app.get('/admin/export/inventory', async (req, res) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('庫存貨表');
+
+  sheet.columns = [
+    { header: '商品名稱', key: 'name', width: 30 },
+    { header: '價格', key: 'price', width: 15 },
+    { header: '庫存', key: 'stock', width: 15 }
+  ];
+
+  sheet.addRow({
+    name: '測試商品',
+    price: 100,
+    stock: 50
+  });
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename=inventory.xlsx'
+  );
+
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+app.get('/admin/export/sales', async (req, res) => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('銷售數據');
+
+  sheet.columns = [
+    { header: '訂單編號', key: 'id', width: 20 },
+    { header: '客戶', key: 'customer', width: 20 },
+    { header: '金額', key: 'total', width: 15 }
+  ];
+
+  sheet.addRow({
+    id: 'A001',
+    customer: '測試客戶',
+    total: 999
+  });
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+
+  res.setHeader(
+    'Content-Disposition',
+    'attachment; filename=sales.xlsx'
+  );
+
+  await workbook.xlsx.write(res);
+  res.end();
+});
 app.listen(PORT, () => {
   console.log('');
   console.log('====================================');
