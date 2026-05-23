@@ -1,39 +1,37 @@
-# 888台灣商店部署重點
+# Railway 部署修正版
 
-已修改：
+這一版已移除 Dockerfile，改強制使用 Nixpacks 安裝 Node 套件，修正 Railway 出現：
 
-- Telegram 客服連結已改為：https://t.me/TWSHOP888
-- Header 客服按鈕已改為正式連結
-- 左下角 Telegram 浮動按鈕已改為正式連結
-- 訂單完成頁 Telegram 按鈕已改為正式連結
-- Header Logo 已更新為 888 TAIWAN SHOP 圖片
-- 保留 SQLite + Railway Volume 永久保存架構
+```txt
+Error: Cannot find module 'express'
+```
 
-Railway Variables：
+## Railway Variables
 
 ```env
 PERSIST_DIR=/data
 SQLITE_PATH=/data/shop.sqlite
 UPLOAD_DIR=/data/uploads
-SESSION_SECRET=888SHOP_SECRET_2026_CHANGE_ME
+SESSION_SECRET=888SHOP_SECRET_2026
 NIXPACKS_NODE_VERSION=20
 ```
 
-Railway Volume Mount Path：
+## Volume
 
-```text
+Mount Path:
+
+```txt
 /data
 ```
 
-後台預設帳密：
+## GitHub 上傳注意
 
-```text
-帳號：My999
-密碼：Mas999
-```
+不要上傳 node_modules。
+把本 ZIP 解壓縮後，進入資料夾內，全選所有檔案上傳到 GitHub 根目錄。
 
-部署注意：
+## Railway 操作
 
-- 不要上傳 node_modules
-- GitHub 上傳整包檔案後 Railway 會自動 npm install
-- Railway 必須使用 Node 20
+1. 上傳 GitHub 後回 Railway
+2. 點左上 Deploy 套用變更
+3. 若仍失敗，進 Settings → Clear Build Cache
+4. 再 Redeploy
