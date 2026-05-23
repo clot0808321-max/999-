@@ -202,7 +202,7 @@ function makeSvg(name, color) {
     <circle cx="670" cy="90" r="70" fill="#ffffff" opacity=".28"/>
     <rect x="90" y="120" width="620" height="320" rx="28" fill="#fff" opacity=".92"/>
     <text x="400" y="280" text-anchor="middle" font-family="Arial,'Microsoft JhengHei'" font-size="54" font-weight="700" fill="#b91c1c">${name}</text>
-    <text x="400" y="350" text-anchor="middle" font-family="Arial,'Microsoft JhengHei'" font-size="28" fill="#555">99台灣商店</text>
+    <text x="400" y="350" text-anchor="middle" font-family="Arial,'Microsoft JhengHei'" font-size="28" fill="#555">888台灣商店</text>
   </svg>`;
 }
 ['黑松沙士','維力炸醬麵','台灣米酒','香菸展示品','冷凍蔥抓餅','金蘭醬油','義美小泡芙','拜拜金紙組'].forEach((n, i) => {
@@ -426,7 +426,7 @@ app.post('/admin/orders/:id/status', requireAdmin, (req,res)=>{
 app.listen(PORT, () => {
   console.log('');
   console.log('====================================');
-  console.log('99台灣商店已啟動');
+  console.log('888台灣商店已啟動');
   console.log('前台：http://localhost:' + PORT);
   console.log('後台：http://localhost:' + PORT + '/admin');
   console.log('帳號：My999');

@@ -12,7 +12,7 @@
 
 不要在 ZIP 壓縮檔裡面直接點啟動，必須先解壓縮。
 
-# 99台灣商店
+# 888台灣商店
 
 這是一套完整可本地執行的商店網站：
 
@@ -80,7 +80,7 @@ npm start
 看到：
 
 ```txt
-99台灣商店已啟動：http://localhost:3000
+888台灣商店已啟動：http://localhost:3000
 ```
 
 代表成功。
@@ -253,7 +253,7 @@ views/home.ejs
 找到：
 
 ```text
-https://t.me/your_telegram
+https://t.me/TWSHOP888
 ```
 
 改成你的 Telegram 連結，例如：
