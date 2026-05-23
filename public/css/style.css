@@ -128,5 +128,3 @@ body{background:#fff;color:var(--bj-text)}
   .catalog-card.bj-item img{width:84px;height:84px;}
   .bj-info h3{font-size:16px!important;}
   .bj-info .sub,.bj-info .stock-line{font-size:11px;}
-  .bj-card-bottom .price-line{font-size:13px!important;}
-}
