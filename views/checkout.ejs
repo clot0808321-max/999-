@@ -2,6 +2,7 @@
 <%- include('partials-header', {cartCount}) %>
 <main class="container form-page">
   <h1>結帳下單</h1>
+  <% if (error === 'stock') { %><div class="alert">商品庫存不足或已下架，請返回購物車調整。</div><% } %>
   <div class="checkout-grid">
     <form action="/checkout" method="post" class="panel">
       <label>姓名<input required name="customer_name" placeholder="請輸入姓名"></label>
@@ -12,7 +13,7 @@
     </form>
     <div class="panel">
       <h2>訂單內容</h2>
-      <% cart.forEach(item => { %><p><%= item.name %> × <%= item.quantity %> = $<%= formatPrice(item.price * item.quantity) %></p><% }) %>
+      <% cart.forEach(item => { %><p><%= item.name %> × <%= item.quantity %> <%= item.unit || '件' %> = $<%= formatPrice(item.price * item.quantity) %></p><% }) %>
       <h3>總金額：$<%= formatPrice(total) %></h3>
     </div>
   </div>

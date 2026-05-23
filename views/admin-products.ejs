@@ -2,15 +2,37 @@
 <div class="admin-layout"><%- include('partials-admin-nav') %>
 <main class="admin-main">
   <div class="topline"><h1>商品管理</h1><a class="btn" href="/admin/products/new">新增商品</a></div>
-<div style="margin: 16px 0 24px 0;">
-  <a href="/admin/export/inventory" style="background:#16a34a;color:white;padding:10px 16px;border-radius:8px;text-decoration:none;">
-    匯出庫存貨表 Excel
-  </a>
-</div>
-  <table><tr><th>圖片</th><th>名稱</th><th>分類</th><th>價格</th><th>庫存</th><th>狀態</th><th>操作</th></tr>
+  <p class="muted">提示：按住商品列可上下拖曳排序，放開後會自動儲存，前台會同步顯示。</p>
+  <table><thead><tr><th>排序</th><th>圖片</th><th>名稱</th><th>分類</th><th>價格</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody id="product-sort-list">
   <% products.forEach(p => { %>
-    <tr><td><img class="thumb" src="<%= p.image || '/uploads/sample-1.svg' %>"></td><td><%= p.name %></td><td><%= p.category_name %></td><td>$<%= formatPrice(p.price) %></td><td><%= p.stock %></td><td><%= p.is_active ? '上架' : '下架' %></td>
+    <tr draggable="true" data-id="<%= p.id %>"><td class="drag-handle">☰</td><td><img class="thumb" src="<%= p.image || '/uploads/sample-1.svg' %>"></td><td><%= p.name %></td><td><%= p.category_name %></td><td>$<%= formatPrice(p.price) %> / <%= p.unit || '件' %></td><td><%= p.stock %></td><td><%= p.is_active ? '上架' : '下架' %></td>
     <td><a href="/admin/products/<%= p.id %>/edit">修改</a>
     <form class="inline" action="/admin/products/<%= p.id %>/delete" method="post" onsubmit="return confirm('確定刪除？')"><button class="link-danger">刪除</button></form></td></tr>
-  <% }) %></table>
+  <% }) %></tbody></table>
+  <script>
+    const tbody = document.getElementById('product-sort-list');
+    let dragging = null;
+    if (tbody) {
+      tbody.addEventListener('dragstart', (e) => {
+        dragging = e.target.closest('tr[data-id]');
+        if (dragging) dragging.classList.add('dragging');
+      });
+      tbody.addEventListener('dragend', async () => {
+        if (dragging) dragging.classList.remove('dragging');
+        dragging = null;
+        const ids = [...tbody.querySelectorAll('tr[data-id]')].map(tr => tr.dataset.id);
+        await fetch('/admin/products/sort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        });
+      });
+      tbody.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const after = [...tbody.querySelectorAll('tr[data-id]:not(.dragging)')].find(row => e.clientY <= row.getBoundingClientRect().top + row.offsetHeight / 2);
+        if (!dragging) return;
+        if (after) tbody.insertBefore(dragging, after); else tbody.appendChild(dragging);
+      });
+    }
+  </script>
 </main></div></body></html>

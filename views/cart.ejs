@@ -2,6 +2,7 @@
 <%- include('partials-header', {cartCount}) %>
 <main class="container">
   <h1>購物車</h1>
+  <% if (error === 'stock') { %><div class="alert">商品庫存不足，請調整數量後再下單。</div><% } %>
   <% if (cart.length === 0) { %>
     <div class="empty">購物車目前是空的。<a href="/">回首頁選購</a></div>
   <% } else { %>
@@ -9,7 +10,7 @@
     <% cart.forEach(item => { %>
       <div class="cart-row">
         <img src="<%= item.image || '/uploads/sample-1.svg' %>">
-        <div><strong><%= item.name %></strong><p>$<%= formatPrice(item.price) %></p></div>
+        <div><strong><%= item.name %></strong><p>$<%= formatPrice(item.price) %> / <%= item.unit || '件' %></p></div>
         <input type="hidden" name="product_id" value="<%= item.product_id %>">
         <input type="number" name="quantity" value="<%= item.quantity %>" min="1">
         <div>$<%= formatPrice(item.price * item.quantity) %></div>

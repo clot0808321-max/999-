@@ -4,17 +4,32 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
-const ExcelJS = require('exceljs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const dataDir = path.join(__dirname, 'data');
-const uploadDir = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+// Railway Volume 永久保存設定：
+// 建議 Railway Variables：PERSIST_DIR=/data、SQLITE_PATH=/data/shop.sqlite、UPLOAD_DIR=/data/uploads
+const persistDir = process.env.PERSIST_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
+const dataDir = persistDir;
+const bundledDataDir = path.join(__dirname, 'data');
+const uploadDir = process.env.UPLOAD_DIR || path.join(persistDir, 'uploads');
+const bundledUploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const dbFile = path.join(dataDir, 'shop-data.json');
+const dbFile = path.join(dataDir, 'shop-data.json'); // JSON 備份 / 相容舊結構
+const oldDbFile = path.join(bundledDataDir, 'shop-data.json');
+const sqliteFile = process.env.SQLITE_PATH || path.join(dataDir, 'shop.sqlite');
+let sqlite = null;
+try {
+  const BetterSqlite3 = require('better-sqlite3');
+  sqlite = new BetterSqlite3(sqliteFile);
+  sqlite.pragma('journal_mode = WAL');
+} catch (err) {
+  console.error('SQLite 初始化失敗，請確認已安裝 better-sqlite3：', err.message);
+  throw err;
+}
 
 const defaultCategories = [
   '飲料區','台灣來的酒','香煙區','冷凍食品區','濾嘴區','盤子、隨身盤',
@@ -44,17 +59,141 @@ function defaultData() {
     admins: [{ id: 1, username: 'My999', password_hash: bcrypt.hashSync('Mas999', 10) }]
   };
 }
-function loadDB() {
-  if (!fs.existsSync(dbFile)) {
-    const d = defaultData();
-    fs.writeFileSync(dbFile, JSON.stringify(d, null, 2), 'utf8');
-    return d;
-  }
-  return JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+function normalizeData(data) {
+  const fallback = defaultData();
+  data = data || fallback;
+  data.categories = Array.isArray(data.categories) && data.categories.length ? data.categories : fallback.categories;
+  data.products = Array.isArray(data.products) ? data.products : [];
+  data.orders = Array.isArray(data.orders) ? data.orders : [];
+  data.order_items = Array.isArray(data.order_items) ? data.order_items : [];
+  data.admins = Array.isArray(data.admins) && data.admins.length ? data.admins : fallback.admins;
+  data.products.forEach((p, i) => {
+    p.id = Number(p.id);
+    p.price = parsePrice(p.price);
+    p.stock = Math.max(0, Number.parseInt(p.stock ?? 0, 10) || 0);
+    p.unit = p.unit || '件';
+    p.sort_order = Number(p.sort_order || i + 1);
+    p.is_active = p.is_active ? 1 : 0;
+    p.category_id = Number(p.category_id || 1);
+  });
+  data.categories.forEach((c, i) => { c.id = Number(c.id); c.sort_order = Number(c.sort_order || i + 1); });
+  data.orders.forEach(o => { o.id = Number(o.id); o.total = parsePrice(o.total); });
+  data.order_items.forEach((i, idx) => { i.id = Number(i.id || idx + 1); i.order_id = Number(i.order_id); i.product_id = Number(i.product_id); i.price = parsePrice(i.price); i.quantity = Number(i.quantity || 1); i.subtotal = parsePrice(i.subtotal); });
+  data.nextProductId = Number(data.nextProductId || (Math.max(0, ...data.products.map(p => p.id || 0)) + 1));
+  data.nextCategoryId = Number(data.nextCategoryId || (Math.max(0, ...data.categories.map(c => c.id || 0)) + 1));
+  data.nextOrderId = Number(data.nextOrderId || (Math.max(0, ...data.orders.map(o => o.id || 0)) + 1));
+  return data;
 }
+
+function initSQLite() {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY, name TEXT NOT NULL, sort_order INTEGER DEFAULT 99);
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      price REAL NOT NULL DEFAULT 0,
+      stock INTEGER NOT NULL DEFAULT 0,
+      unit TEXT NOT NULL DEFAULT '件',
+      description TEXT DEFAULT '',
+      image TEXT DEFAULT '',
+      category_id INTEGER,
+      sort_order INTEGER DEFAULT 999,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY,
+      customer_name TEXT,
+      phone TEXT,
+      address TEXT,
+      note TEXT,
+      total REAL NOT NULL DEFAULT 0,
+      status TEXT DEFAULT '新訂單',
+      created_at TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY,
+      order_id INTEGER NOT NULL,
+      product_id INTEGER,
+      product_name TEXT,
+      price REAL NOT NULL DEFAULT 0,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      subtotal REAL NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL);
+  `);
+  const productCols = sqlite.prepare('PRAGMA table_info(products)').all().map(c => c.name);
+  if (!productCols.includes('unit')) sqlite.exec("ALTER TABLE products ADD COLUMN unit TEXT NOT NULL DEFAULT '件'");
+  if (!productCols.includes('sort_order')) sqlite.exec('ALTER TABLE products ADD COLUMN sort_order INTEGER DEFAULT 999');
+}
+
+function readJSONSeed() {
+  const source = fs.existsSync(dbFile) ? dbFile : oldDbFile;
+  if (fs.existsSync(source)) return JSON.parse(fs.readFileSync(source, 'utf8'));
+  return defaultData();
+}
+
+function dbRowCount(table) {
+  return sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count;
+}
+
+function loadDBFromSQLite() {
+  return normalizeData({
+    nextProductId: Number(sqlite.prepare("SELECT value FROM meta WHERE key='nextProductId'").get()?.value || 0),
+    nextCategoryId: Number(sqlite.prepare("SELECT value FROM meta WHERE key='nextCategoryId'").get()?.value || 0),
+    nextOrderId: Number(sqlite.prepare("SELECT value FROM meta WHERE key='nextOrderId'").get()?.value || 0),
+    categories: sqlite.prepare('SELECT * FROM categories ORDER BY sort_order ASC, id ASC').all(),
+    products: sqlite.prepare('SELECT * FROM products ORDER BY sort_order ASC, id DESC').all(),
+    orders: sqlite.prepare('SELECT * FROM orders ORDER BY id DESC').all(),
+    order_items: sqlite.prepare('SELECT * FROM order_items ORDER BY id ASC').all(),
+    admins: sqlite.prepare('SELECT * FROM admins ORDER BY id ASC').all()
+  });
+}
+
 function saveDB(data) {
-  fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf8');
+  data = normalizeData(data);
+  const tx = sqlite.transaction((d) => {
+    sqlite.prepare('DELETE FROM meta').run();
+    sqlite.prepare('DELETE FROM categories').run();
+    sqlite.prepare('DELETE FROM products').run();
+    sqlite.prepare('DELETE FROM orders').run();
+    sqlite.prepare('DELETE FROM order_items').run();
+    sqlite.prepare('DELETE FROM admins').run();
+    const meta = sqlite.prepare('INSERT INTO meta(key,value) VALUES(?,?)');
+    meta.run('nextProductId', String(d.nextProductId));
+    meta.run('nextCategoryId', String(d.nextCategoryId));
+    meta.run('nextOrderId', String(d.nextOrderId));
+    const cat = sqlite.prepare('INSERT INTO categories(id,name,sort_order) VALUES(@id,@name,@sort_order)');
+    const prod = sqlite.prepare(`INSERT INTO products(id,name,price,stock,unit,description,image,category_id,sort_order,is_active,created_at)
+      VALUES(@id,@name,@price,@stock,@unit,@description,@image,@category_id,@sort_order,@is_active,@created_at)`);
+    const ord = sqlite.prepare(`INSERT INTO orders(id,customer_name,phone,address,note,total,status,created_at)
+      VALUES(@id,@customer_name,@phone,@address,@note,@total,@status,@created_at)`);
+    const item = sqlite.prepare(`INSERT INTO order_items(id,order_id,product_id,product_name,price,quantity,subtotal)
+      VALUES(@id,@order_id,@product_id,@product_name,@price,@quantity,@subtotal)`);
+    const admin = sqlite.prepare('INSERT INTO admins(id,username,password_hash) VALUES(@id,@username,@password_hash)');
+    d.categories.forEach(x => cat.run(x));
+    d.products.forEach(x => prod.run(x));
+    d.orders.forEach(x => ord.run(x));
+    d.order_items.forEach(x => item.run(x));
+    d.admins.forEach(x => admin.run(x));
+  });
+  tx(data);
+  fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf8'); // 保留 JSON 相容備份
 }
+
+function loadDB() {
+  initSQLite();
+  if (dbRowCount('products') === 0 && dbRowCount('orders') === 0) {
+    const seed = normalizeData(readJSONSeed());
+    saveDB(seed);
+    return seed;
+  }
+  const data = loadDBFromSQLite();
+  fs.writeFileSync(dbFile, JSON.stringify(data, null, 2), 'utf8');
+  return data;
+}
+
 let db = loadDB();
 
 function makeSvg(name, color) {
@@ -70,11 +209,19 @@ function makeSvg(name, color) {
   const file = path.join(uploadDir, `sample-${i+1}.svg`);
   if (!fs.existsSync(file)) fs.writeFileSync(file, makeSvg(n, ['#fee2e2','#ffedd5','#fef3c7','#e5e7eb','#dbeafe','#dcfce7','#fce7f3','#f3e8ff'][i]), 'utf8');
 });
+if (fs.existsSync(bundledUploadDir)) {
+  fs.readdirSync(bundledUploadDir).forEach(name => {
+    const from = path.join(bundledUploadDir, name);
+    const to = path.join(uploadDir, name);
+    if (fs.statSync(from).isFile() && !fs.existsSync(to)) fs.copyFileSync(from, to);
+  });
+}
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use('/uploads', express.static(uploadDir));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'change-this-secret-99-shop',
@@ -119,7 +266,7 @@ app.get('/', (req, res) => {
   const cat = req.query.cat ? Number(req.query.cat) : null;
   let products = db.products.filter(p => p.is_active);
   if (cat) products = products.filter(p => Number(p.category_id) === cat);
-  products = products.sort((a,b)=>b.id-a.id).map(productWithCategory);
+  products = products.sort((a,b)=>(a.sort_order||999)-(b.sort_order||999) || b.id-a.id).map(productWithCategory);
   const orderedCategories = categories();
   const productsByCategory = orderedCategories.map(category => ({
     category,
@@ -141,15 +288,17 @@ app.post('/cart/add', (req, res) => {
   if (!product) return res.redirect('/');
   const cart = getCart(req);
   const item = cart.find(i => i.product_id === productId);
+  const currentQty = item ? Number(item.quantity || 0) : 0;
+  if (currentQty + quantity > Number(product.stock || 0)) return res.redirect('/cart?error=stock');
   if (item) item.quantity += quantity;
-  else cart.push({ product_id: product.id, name: product.name, price: product.price, image: product.image, quantity });
+  else cart.push({ product_id: product.id, name: product.name, price: product.price, image: product.image, unit: product.unit || '件', quantity });
   res.redirect('/cart');
 });
 
 app.get('/cart', (req, res) => {
   const cart = getCart(req);
   const total = calcTotal(cart);
-  res.render('cart', { cart, total, cartCount: cartCount(req) });
+  res.render('cart', { cart, total, cartCount: cartCount(req), error: req.query.error || null });
 });
 
 app.post('/cart/update', (req, res) => {
@@ -158,7 +307,11 @@ app.post('/cart/update', (req, res) => {
   const qtys = Array.isArray(req.body.quantity) ? req.body.quantity : [req.body.quantity];
   req.session.cart = cart.map(item => {
     const idx = ids.findIndex(id => Number(id) === item.product_id);
-    if (idx >= 0) item.quantity = Math.max(1, Number(qtys[idx] || 1));
+    if (idx >= 0) {
+      const p = db.products.find(x => x.id === item.product_id);
+      const want = Math.max(1, Number(qtys[idx] || 1));
+      item.quantity = p ? Math.min(want, Math.max(0, Number(p.stock || 0))) : want;
+    }
     return item;
   });
   res.redirect('/cart');
@@ -173,12 +326,17 @@ app.get('/checkout', (req, res) => {
   const cart = getCart(req);
   if (!cart.length) return res.redirect('/cart');
   const total = calcTotal(cart);
-  res.render('checkout', { cart, total, cartCount: cartCount(req) });
+  res.render('checkout', { cart, total, cartCount: cartCount(req), error: req.query.error || null });
 });
 
 app.post('/checkout', (req, res) => {
   const cart = getCart(req);
   if (!cart.length) return res.redirect('/cart');
+  const insufficient = cart.find(item => {
+    const p = db.products.find(x => x.id === item.product_id && x.is_active);
+    return !p || Number(item.quantity || 0) > Number(p.stock || 0);
+  });
+  if (insufficient) return res.redirect('/checkout?error=stock');
   const total = calcTotal(cart);
   const orderId = db.nextOrderId++;
   const order = { id: orderId, customer_name:req.body.customer_name, phone:req.body.phone, address:req.body.address, note:req.body.note||'', total, status:'新訂單', created_at: now() };
@@ -211,13 +369,14 @@ app.get('/admin', requireAdmin, (req, res) => {
 });
 
 app.get('/admin/products', requireAdmin, (req, res) => {
-  const products = [...db.products].sort((a,b)=>b.id-a.id).map(productWithCategory);
+  const products = [...db.products].sort((a,b)=>(a.sort_order||999)-(b.sort_order||999) || b.id-a.id).map(productWithCategory);
   res.render('admin-products', { products });
 });
 app.get('/admin/products/new', requireAdmin, (req, res) => res.render('admin-product-form', { product: null, categories: categories() }));
 app.post('/admin/products/new', requireAdmin, upload.single('image'), (req, res) => {
   const image = req.file ? '/uploads/' + req.file.filename : '';
-  db.products.push({ id: db.nextProductId++, name:req.body.name, price:parsePrice(req.body.price), stock:Number(req.body.stock), description:req.body.description||'', image, category_id:Number(req.body.category_id), is_active:req.body.is_active?1:0, created_at: now() });
+  const nextSort = Math.max(0, ...db.products.map(p => Number(p.sort_order || 0))) + 1;
+  db.products.push({ id: db.nextProductId++, name:req.body.name, price:parsePrice(req.body.price), stock:Math.max(0, Number(req.body.stock || 0)), unit:req.body.unit || '件', description:req.body.description||'', image, category_id:Number(req.body.category_id), sort_order:nextSort, is_active:req.body.is_active?1:0, created_at: now() });
   saveDB(db);
   res.redirect('/admin/products');
 });
@@ -229,12 +388,22 @@ app.get('/admin/products/:id/edit', requireAdmin, (req, res) => {
 app.post('/admin/products/:id/edit', requireAdmin, upload.single('image'), (req, res) => {
   const p = db.products.find(x=>x.id===Number(req.params.id));
   if (!p) return res.redirect('/admin/products');
-  p.name=req.body.name; p.price=parsePrice(req.body.price); p.stock=Number(req.body.stock); p.description=req.body.description||''; p.category_id=Number(req.body.category_id); p.is_active=req.body.is_active?1:0;
+  p.name=req.body.name; p.price=parsePrice(req.body.price); p.stock=Math.max(0, Number(req.body.stock || 0)); p.unit=req.body.unit || '件'; p.description=req.body.description||''; p.category_id=Number(req.body.category_id); p.is_active=req.body.is_active?1:0;
   if (req.file) p.image = '/uploads/' + req.file.filename;
   saveDB(db);
   res.redirect('/admin/products');
 });
 app.post('/admin/products/:id/delete', requireAdmin, (req,res)=>{ db.products = db.products.filter(p=>p.id!==Number(req.params.id)); saveDB(db); res.redirect('/admin/products'); });
+
+app.post('/admin/products/sort', requireAdmin, (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number) : [];
+  ids.forEach((id, index) => {
+    const p = db.products.find(x => x.id === id);
+    if (p) p.sort_order = index + 1;
+  });
+  saveDB(db);
+  res.json({ ok: true });
+});
 
 app.get('/admin/categories', requireAdmin, (req,res)=>res.render('admin-categories', { categories: categories() }));
 app.post('/admin/categories/new', requireAdmin, (req,res)=>{ db.categories.push({id:db.nextCategoryId++, name:req.body.name, sort_order:Number(req.body.sort_order||99)}); saveDB(db); res.redirect('/admin/categories'); });
@@ -254,69 +423,6 @@ app.post('/admin/orders/:id/status', requireAdmin, (req,res)=>{
   res.redirect('/admin/orders/' + req.params.id);
 });
 
-app.get('/admin/export/inventory', async (req, res) => {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('庫存貨表');
-
-  sheet.columns = [
-    { header: '商品名稱', key: 'name', width: 30 },
-    { header: '價格', key: 'price', width: 15 },
-    { header: '庫存', key: 'stock', width: 15 }
-  ];
-
-  db.products.forEach(p => {
-  sheet.addRow({
-    name: p.name || '',
-    price: p.price || '',
-    stock: p.stock || ''
-  });
-});
-
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename=inventory.xlsx'
-  );
-
-  await workbook.xlsx.write(res);
-  res.end();
-});
-
-app.get('/admin/export/sales', async (req, res) => {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('銷售數據');
-
-  sheet.columns = [
-    { header: '訂單編號', key: 'id', width: 20 },
-    { header: '客戶', key: 'customer', width: 20 },
-    { header: '金額', key: 'total', width: 15 }
-  ];
-
- db.orders.forEach(o => {
-  sheet.addRow({
-    id: o.id || '',
-    customer: o.customer_name || '',
-    total: o.total || ''
-  });
-});
-
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename=sales.xlsx'
-  );
-
-  await workbook.xlsx.write(res);
-  res.end();
-});
 app.listen(PORT, () => {
   console.log('');
   console.log('====================================');
@@ -325,6 +431,8 @@ app.listen(PORT, () => {
   console.log('後台：http://localhost:' + PORT + '/admin');
   console.log('帳號：My999');
   console.log('密碼：Mas999');
+  console.log('SQLite：' + sqliteFile);
+  console.log('Uploads：' + uploadDir);
   console.log('====================================');
   console.log('');
 });

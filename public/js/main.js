@@ -1,4 +1,4 @@
-console.log('999台灣商店前台已載入');
+console.log('99台灣商店前台已載入');
 
 (function(){
   const search = document.getElementById('productSearch');

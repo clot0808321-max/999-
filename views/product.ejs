@@ -5,12 +5,12 @@
   <section>
     <span class="tag"><%= product.category_name %></span>
     <h1><%= product.name %></h1>
-    <div class="price big">$<%= formatPrice(product.price) %></div>
-    <p class="<%= product.stock <= 0 ? 'soldout' : '' %>"><%= product.stock > 0 ? ('庫存：' + product.stock) : '已售完' %></p>
+    <div class="price big">$<%= formatPrice(product.price) %> / <%= product.unit || '件' %></div>
+    <p class="<%= product.stock <= 0 ? 'soldout' : '' %>"><%= product.stock > 0 ? ('庫存：' + product.stock + ' ' + (product.unit || '件')) : '已售完' %></p>
     <p class="desc"><%= product.description %></p>
     <form class="buy-box" action="/cart/add" method="post">
       <input type="hidden" name="product_id" value="<%= product.id %>">
-      <label>數量 <input type="number" name="quantity" value="1" min="1"></label>
+      <label>數量 <input type="number" name="quantity" value="1" min="1" max="<%= product.stock %>"></label>
       <button class="btn" <%= product.stock <= 0 ? 'disabled' : '' %>>加入購物車</button>
     </form>
   </section>

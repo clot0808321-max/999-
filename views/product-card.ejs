@@ -4,10 +4,10 @@
   </a>
   <div class="catalog-info bj-info">
     <h3><a href="/product/<%= p.id %>"><%= p.name %></a></h3>
-    <p class="sub"><%= p.description || p.category_name || '999台灣商店商品' %></p>
-    <p class="stock-line <%= p.stock <= 0 ? 'soldout' : '' %>"><%= p.stock > 0 ? ('現貨 ' + p.stock + ' 件') : '已售完' %></p>
+    <p class="sub"><%= p.description || p.category_name || '99台灣商店商品' %></p>
+    <p class="stock-line <%= p.stock <= 0 ? 'soldout' : '' %>"><%= p.stock > 0 ? ('現貨 ' + p.stock + ' ' + (p.unit || '件')) : '已售完' %></p>
     <div class="bj-card-bottom">
-      <div class="price-line">$<%= formatPrice(p.price) %><span>/件</span></div>
+      <div class="price-line">$<%= formatPrice(p.price) %><span>/<%= p.unit || '件' %></span></div>
       <form action="/cart/add" method="post">
         <input type="hidden" name="product_id" value="<%= p.id %>">
         <input type="hidden" name="quantity" value="1">
